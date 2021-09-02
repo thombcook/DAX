@@ -1,0 +1,7 @@
+Value_Numeric_Sparkline_ LastDate = //Uses SVG in repository for implementation.
+
+var datetime = [Report_Date_LastDate]
+VAR Blank_Test = CALCULATE(MAX(MetricInputsFlat[ProjectID]), FILTER(MetricInputsFlat, MetricInputsFlat[ReportDate] = datetime))
+VAR Sprk = CALCULATE([Value_Numeric_Sparkline], ALLEXCEPT(MetricInputMetrics,MetricInputMetrics[ProjectID], MetricInputMetrics[Metrics.ShortName], Projects[Project Code and Name]), FILTER(MetricInputMetrics, MetricInputMetrics[ReportDate] <= datetime))
+
+RETURN IF(ISBLANK(Blank_Test)=TRUE(), BLANK(), Sprk)

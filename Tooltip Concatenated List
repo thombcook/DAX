@@ -1,0 +1,8 @@
+Program List DPI = 
+//VAR TABLEVALUES = ADDCOLUMNS( 
+   // SUMMARIZE(fact_DTUPC_measure, fact_DTUPC_measure[Project Code and Name]),
+    //"TPM COUNT", CALCULATE(COUNT(VW_TPM_METRIC[TPM_Monthly_Metric_Rating_Cat_Color]), FILTER(VW_TPM_METRIC, VW_TPM_METRIC[PROGRAM_NAME]=EARLIER(VW_TPM_METRIC[PROGRAM_NAME]))))
+
+VAR LIST = CONCATENATEX(fact_DTUPC_measure, IF(ISBLANK(fact_DTUPC_measure[DPI]), " N/A ", FORMAT(fact_DTUPC_measure[DPI], "0.00")) & " " & [Project Code and Name], UNICHAR(10), fact_DTUPC_measure[DPI], ASC)
+
+RETURN LIST

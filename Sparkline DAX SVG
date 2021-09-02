@@ -1,0 +1,246 @@
+Value_Numeric_Sparkline = //Note need the 'LastDate' measure in combo with this to implement.
+//Calculated column of line graphs showing the number of programs below target for EAC Growth over time. 
+
+//Need the below datetime to help know what the filtered latest date vs the last date there was a value for a program. 
+VAR Datetime = [Report_Date_LastDate]
+
+VAR RefLineColorGreen = "%23008000"
+VAR RefLineColorRed = "%23DC143C"
+// "Date" field used in this example along the X axis
+
+VAR XMinDate = IF(ISBLANK(MAX(MetricInputMetrics[ReportDate_Prev5])), MIN(MetricInputsFlat[ReportDate]), MAX(MetricInputMetrics[ReportDate_Prev5]))
+    
+VAR XMaxDate = MAX(MetricInputMetrics[ReportDate])
+
+Var MasterTable = 
+   ADDCOLUMNS(SUMMARIZE(CALCULATETABLE(MetricInputMetrics, ALLEXCEPT(Projects, Projects[Project Code and Name]), MetricInputMetrics[ReportDate] <= XMaxDate && MetricInputMetrics[ReportDate] >= XMinDate), 
+   MetricInputMetrics[ReportDate]), 
+   "Value_Numeric", CALCULATE(MAX(MetricInputMetrics[Value - Numeric]), LASTDATE(MetricInputMetrics[ReportDate])))
+
+//Categorize the metrics for different customization - color ranges, Y index matching
+VAR MetricsForColorRanges = {"3009", "3010", "3013", "3014"} //MetricIDs for SPI and CPI metrics
+VAR CostDollars = {"3124", "4183"}
+VAR SPI = {"3009", "3010"}
+VAR CPI = {"3013", "3014"}
+VAR CostHours = {"436", "437", "3038"} 
+
+// Obtain overall min and overall max measure values when evaluated for each date
+VAR TargetBlue = 1 
+VAR TargetGreen = .95
+VAR TargetRed = .9
+
+VAR MAXValues = IF(MAX(MetricInputMetrics[MetricID]) IN CostDollars, CALCULATE(MAX(MetricInputMetrics[Value - Numeric]), ALLEXCEPT(MetricInputMetrics, Projects[Project Code and Name], MetricInputMetrics[ReportDate]), MetricInputMetrics[MetricID] IN CostDollars, MetricInputMetrics[ReportDate] <= XMaxDate && MetricInputMetrics[ReportDate] >= XMinDate),
+                IF(MAX(MetricInputMetrics[MetricID]) IN SPI, CALCULATE(MAX(MetricInputMetrics[Value - Numeric]), ALLEXCEPT(MetricInputMetrics, Projects[Project Code and Name], MetricInputMetrics[ReportDate]), MetricInputMetrics[MetricID] IN SPI, MetricInputMetrics[ReportDate] <= XMaxDate && MetricInputMetrics[ReportDate] >= XMinDate),
+                IF(MAX(MetricInputMetrics[MetricID]) IN CPI, CALCULATE(MAX(MetricInputMetrics[Value - Numeric]), ALLEXCEPT(MetricInputMetrics, Projects[Project Code and Name], MetricInputMetrics[ReportDate]), MetricInputMetrics[MetricID] IN CPI, MetricInputMetrics[ReportDate] <= XMaxDate && MetricInputMetrics[ReportDate] >= XMinDate),
+                IF(MAX(MetricInputMetrics[MetricID]) IN CostHours, CALCULATE(MAX(MetricInputMetrics[Value - Numeric]), ALLEXCEPT(MetricInputMetrics, Projects[Project Code and Name], MetricInputMetrics[ReportDate]), MetricInputMetrics[MetricID] IN CostHours, MetricInputMetrics[ReportDate] <= XMaxDate && MetricInputMetrics[ReportDate] >= XMinDate),
+                CALCULATE(MAX(MetricInputMetrics[Value - Numeric]), MetricInputMetrics[ReportDate] <= XMaxDate && MetricInputMetrics[ReportDate] >= XMinDate)
+                ))))
+
+VAR MINValues = IF(MIN(MetricInputMetrics[MetricID]) IN CostDollars, CALCULATE(MIN(MetricInputMetrics[Value - Numeric]), ALLEXCEPT(MetricInputMetrics, Projects[Project Code and Name], MetricInputMetrics[ReportDate]), MetricInputMetrics[MetricID] IN CostDollars),
+                IF(MIN(MetricInputMetrics[MetricID]) IN SPI, CALCULATE(MIN(MetricInputMetrics[Value - Numeric]), ALLEXCEPT(MetricInputMetrics, Projects[Project Code and Name], MetricInputMetrics[ReportDate]), MetricInputMetrics[MetricID] IN SPI),
+                IF(MIN(MetricInputMetrics[MetricID]) IN CPI, CALCULATE(MIN(MetricInputMetrics[Value - Numeric]), ALLEXCEPT(MetricInputMetrics, Projects[Project Code and Name], MetricInputMetrics[ReportDate]), MetricInputMetrics[MetricID] IN CPI),
+                IF(MIN(MetricInputMetrics[MetricID]) IN CostHours, CALCULATE(MIN(MetricInputMetrics[Value - Numeric]), ALLEXCEPT(MetricInputMetrics, Projects[Project Code and Name], MetricInputMetrics[ReportDate]), MetricInputMetrics[MetricID] IN CostHours),
+                CALCULATE(Min(MetricInputMetrics[Value - Numeric]), MetricInputMetrics[ReportDate] <= XMaxDate && MetricInputMetrics[ReportDate] >= XMinDate)))))
+
+//Use this if statement to evaluate what the lowest value on the graph should be. Either the lowest value or the red dotted line.
+
+//VAR YMaxValue1 =  MAX([Value - Numeric])
+
+VAR YMinValue1 = MINValues - .05* MINValues //IF(YMinValue1 > TargetGreen, TargetGreen, YMinValue1)
+VAR YMaxValue1 = MAXValues + .025* MAXValues //IF(YMaxValue1 < TargetGreen, TargetGreen, YMaxValue1)
+
+//Adjust max and min based on the SPI and CPI target if we're dealing with SPI and CPI
+VAR YMinValue = IF(MAX(MetricInputMetrics[MetricID]) in MetricsForColorRanges && YMinValue1 > TargetRed, TargetRed, YMinValue1)
+VAR YMaxValue = IF(MAX(MetricInputMetrics[MetricID]) in MetricsForColorRanges && YMaxValue1 < TargetBlue, TargetBlue, YMaxValue1)
+
+
+//Make Axis values
+VAR MinMaxRange = YMaxValue - YMinValue
+VAR Axis100 = MinMaxRange + YMinValue
+VAR Axis75 = MinMaxRange*.75 + YMinValue
+VAR Axis50 = MinMaxRange*.5 + YMinValue
+VAR Axis25 = MinMaxRange*.25 + YMinValue
+VAR Axis0 = YMinValue
+
+// X_Axis_Adjustment used to start graphing a the right location on the SVG
+Var X_Axis_Adjustment = 40
+VAR Width = 152
+var max_x_axis=152
+var height = 150
+var y_axis_adjustment = height - (height)/6
+
+
+// Create a table for the whole filtered reporting period so we can plot the constant lines across the whole graph. 
+VAR SparklineTable_ConstantLines = ADDCOLUMNS(
+    SUMMARIZE(CALCULATETABLE(MasterTable, FILTER(MasterTable, ISBLANK([Value_Numeric])=FALSE() &&  [ReportDate] <= XMaxDate && [ReportDate] >= XMinDate)), [Value_Numeric], [ReportDate]),
+        "X", INT((Width-X_Axis_Adjustment-1) * DIVIDE([ReportDate] - XMinDate, XMaxDate - XMinDate)),
+        "Y", INT(100 * DIVIDE([Value_Numeric] - YMinValue, YMaxValue - YMinValue)),
+        "Y2", INT(100 * DIVIDE(TargetGreen - YMinValue, YMaxValue - YMinValue)),
+        "Y3", INT(100 * DIVIDE(TargetRed - YMinValue, YMaxValue - YMinValue)),
+        "Y4", INT(100 * DIVIDE(TargetBlue - YMinValue, YMaxValue - YMinValue)),
+        "Axis100", INT(100 * DIVIDE(Axis100 - YMinValue, YMaxValue - YMinValue)),
+        "Axis75", INT(100 * DIVIDE(Axis75 - YMinValue, YMaxValue - YMinValue)),
+        "Axis50", INT(100 * DIVIDE(Axis50 - YMinValue, YMaxValue - YMinValue)),
+        "Axis25", INT(100 * DIVIDE(Axis25 - YMinValue, YMaxValue - YMinValue)),
+        "Axis0", INT(100 * DIVIDE(Axis0 - YMinValue, YMaxValue - YMinValue)),
+        "Letter", IF([ReportDate] = XMinDate, "M", "L"))
+// Concatenate X & Y coordinates to build the sparkline
+
+
+
+// Concatenate X & Y coordinates to build the sparkline
+VAR Lines = CONCATENATEX(FILTER(SparklineTable_ConstantLines, ISBLANK([Value_Numeric]) = FALSE()), [X]+X_Axis_Adjustment & "," & y_axis_adjustment-[Y]," ", [ReportDate])
+
+// Add to SVG, and verify Data Category is set to Image URL for this measure
+//Reference line for green tgt
+VAR Lines2 = CONCATENATE(X_Axis_Adjustment & "," & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Y2]), " " &  max_x_axis & ", " & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Y2]))
+//Reference line for Red tgt.
+VAR Lines3 = CONCATENATE(X_Axis_Adjustment & "," & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Y3]), " " &  max_x_axis & ", " & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Y3]))
+
+//Unused line for axis.
+VAR Lines4 = CONCATENATEX(SparklineTable_ConstantLines, [X]+X_Axis_Adjustment & "," & y_axis_adjustment + 5, " ", [ReportDate])
+//Blue Reference line
+VAR Lines5 = CONCATENATE(X_Axis_Adjustment & "," & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Y4]), " " &  max_x_axis & ", " & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Y4]))
+VAR Circles = CONCATENATEX(FILTER(SparklineTable_ConstantLines, ISBLANK([Value_Numeric]) = FALSE()), "<circle" & " cx='" & [X]+X_Axis_Adjustment & "' cy='" & y_axis_adjustment-[Y] & "' r='3' 
+stroke='black' stroke-width='1' fill='" &  
+        IF(MAX(MetricInputMetrics[MetricID]) in MetricsForColorRanges, IF([Y] > [Y4], "%2300B0F0",
+        IF([Y] > [Y2] && [Y] <= [Y4], "%2307FF14",
+        IF([Y] > [Y3] && [Y] <= [Y2], "%23FFFF00",
+        IF([Y] <= [Y3], "%23FF0000", "%2300000")))), "%23CC5500")
+         &"'/> ", " ", [ReportDate])
+
+//Axis lines
+VAR LinesAxis100 = CONCATENATE(X_Axis_Adjustment & "," & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Axis100]), " " & max_x_axis & ", " & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Axis100]))
+VAR LinesAxis75 = CONCATENATE(X_Axis_Adjustment & "," & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Axis75]), " " &  max_x_axis & ", " & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Axis75]))
+VAR LinesAxis50 = CONCATENATE(X_Axis_Adjustment & "," & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Axis50]), " " &  max_x_axis & ", " & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Axis50]))
+VAR LinesAxis25 = CONCATENATE(X_Axis_Adjustment & "," & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [axis25]), " " &  max_x_axis & ", " & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [axis25]))
+VAR LinesAxis0 = CONCATENATE(X_Axis_Adjustment & "," & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Axis0]), " " &  max_x_axis & ", " & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Axis0]))
+
+//Axis Number Formatting
+VAR AxisFormatting = IF(ABS(Axis100) <= 1000 && ABS(Axis0) <= 1000, "None",
+                    IF(ABS(Axis100) < 1000000 && ABS(Axis0) < 1000000, "K",
+                    IF(ABS(Axis100) >= 1000000 || ABS(Axis0) >= 1000000, "M", BLANK())))
+
+VAR AxisNumberFormatAxis100 = IF(AxisFormatting = "K" , FORMAT(ROUND(Axis100/1000, 1), "0.0") & "k",
+                                IF(AxisFormatting = "M", FORMAT(ROUND(Axis100/1000000, 2), "0.0") & "m",
+                                IF(AxisFormatting = "None", FORMAT(ROUND(Axis100, 2), "0.00"),
+                                BLANK())))
+VAR AxisNumberFormatAxis75 = IF(AxisFormatting = "K" , FORMAT(ROUND(Axis75/1000, 1), "0.0") & "k",
+                                IF(AxisFormatting = "M", FORMAT(ROUND(Axis75/1000000, 2), "0.0") & "m",
+                                IF(AxisFormatting = "None", FORMAT(ROUND(Axis75, 2), "0.00"),
+                                BLANK())))
+VAR AxisNumberFormatAxis50 = IF(AxisFormatting = "K" , FORMAT(ROUND(Axis50/1000, 1), "0.0") & "k",
+                                IF(AxisFormatting = "M", FORMAT(ROUND(Axis50/1000000, 2), "0.0") & "m",
+                                IF(AxisFormatting = "None", FORMAT(ROUND(Axis50, 2), "0.00"),
+                                BLANK())))
+VAR AxisNumberFormatAxis25 = IF(AxisFormatting = "K" , FORMAT(ROUND(Axis25/1000, 1), "0.0") & "k",
+                                IF(AxisFormatting = "M", FORMAT(ROUND(Axis25/1000000, 2), "0.0") & "m",
+                                IF(AxisFormatting = "None", FORMAT(ROUND(Axis25, 2), "0.00"),
+                                BLANK())))
+VAR AxisNumberFormatAxis0 = IF(AxisFormatting = "K" , FORMAT(ROUND(Axis0/1000, 1), "0.0") & "k",
+                                IF(AxisFormatting = "M", FORMAT(ROUND(Axis0/1000000, 2), "0.0") & "m",
+                                IF(AxisFormatting = "None", FORMAT(ROUND(Axis0, 2), "0.00"),
+                                BLANK())))
+
+VAR BlueLineY = 125 - MAXX(SparklineTable_ConstantLines, [Y4])
+VAR GreenlineY = 125-MAXX(SparklineTable_ConstantLines, [Y2])
+VAR RedlineY = 125 - MAXX(SparklineTable_ConstantLines, [Y3])
+VAR BlueHeight = BlueLineY
+VAR Greenheight = GreenlineY - BlueLineY
+VAR YellowHeight = RedlineY - GreenlineY
+VAR RedHeight =  150 - BlueHeight - Greenheight - YellowHeight
+
+VAR SPI_CPI_Ranges =     
+    //Plot blue rect
+    IF(MAX(MetricInputMetrics[MetricID]) in MetricsForColorRanges, 
+    "<rect x='0' y='" & "0" & "' width='" & Width & "' height='" & BlueHeight & "' fill='%231813FF' opacity='0.08'/>"
+    &
+    //Plot yellow range
+    "<rect x='0' y='" & GreenlineY & "' width='" & Width & "' height='" & YellowHeight & "' fill='%23FFFF00' opacity='0.1' />" 
+    &
+    //Plot Green rect
+    "<rect x='0' y='" & BlueLineY & "' width='" & Width & "' height='" & Greenheight & "' fill='%2300B050' opacity='0.1'/>"
+    &
+    //Plot Red rect
+    "<rect x='0' y='" & RedlineY & "' width='" & Width & "' height='" & RedHeight & "' fill='%23FF0000' opacity='0.1'/>", "")
+
+//VAR Axis_Label_Min = "'1'"
+VAR SVGImageURL = 
+    "data:image/svg+xml;utf8," & 
+    //set the basic box criteria
+    "<svg xmlns='http://www.w3.org/2000/svg' x='0px' y='0px' viewBox='0 0 " & Width & " " & height & "' style='background: %23FFFFFF'>" &
+
+//"<rect x='1' y='1' width='" & Width-2 & "' height='" & height-2 & "' style='stroke: %23000000; stroke-width='1px' fill:none'/>"
+//&
+//Add background colors for SPI and CPI
+SPI_CPI_Ranges
+
+&
+
+        //Add green reference line.
+     //"<polyline fill='none' stroke='" & "%231813FF" & 
+    // "' stroke-width='3' stroke-dasharray = '4,5' points='" & Lines2 & 
+    // "'/>" 
+    // &
+         //Y Axis vertical line
+    "<line x1='"& X_Axis_Adjustment &"' y1='10' x2='"& X_Axis_Adjustment &"' y2='" & y_axis_adjustment-MAXX(SparklineTable_ConstantLines, [Axis0]) & "' stroke='black' stroke-width='1' />"
+
+    &
+    "<polyline fill='none' stroke='" & "%23CCCCCC" &  
+     "' stroke-width='1' points='" & LinesAxis100 & 
+     "'/>" 
+    &
+    "<polyline fill='none' stroke='" & "%23CCCCCC" & 
+     "' stroke-width='1' points='" & LinesAxis75 & 
+     "'/>" 
+        &
+    "<polyline fill='none' stroke='" & "%23CCCCCC" & 
+     "' stroke-width='1' points='" & LinesAxis50 & 
+     "'/>" 
+    &
+    "<polyline fill='none' stroke='" & "%23CCCCCC" & 
+    "' stroke-width='1' points='" & LinesAxis25 & 
+    "'/>" 
+    &
+    "<polyline fill='none' stroke='" & "black" & 
+     "' stroke-width='1' points='" & LinesAxis0 & 
+     "'/>"  
+     &
+    //Add green reference line.
+    // "<polyline fill='none' stroke='" & RefLineColorGreen & 
+     //"' stroke-width='4' stroke-dasharray = '4,5' points='" & Lines2 & 
+     //"'/>" 
+     //&
+
+    //Plot the line
+    "<polyline fill='none' stroke='" & "%23000000" & 
+     "' stroke-width='3' points='" & Lines & 
+     "'/>" &
+     
+    //Add the dots
+     Circles 
+     
+     &
+    //Add date text at bottom
+     "<text x='80' y='" & height - 5 & "' dominant-baseline='middle' style='text-anchor: middle' font-weight='bold' >" & FORMAT(XMinDate, "MM/YY") & " to " & FORMAT(Datetime, "MM/YY") & "</text>" &      
+
+               "<text x='"& X_Axis_Adjustment-1 &"' y='" & y_axis_adjustment-INT(100 * DIVIDE(Axis100 - YMinValue, YMaxValue - YMinValue)) & "' style='text-anchor: end' dominant-baseline='middle'                  font-weight='bold'  font-size='17px'  >" & AxisNumberFormatAxis100 & "</text>"
+      &
+     "<text x='"& X_Axis_Adjustment-1 &"' y='" & y_axis_adjustment-INT(100 * DIVIDE(Axis75 - YMinValue, YMaxValue - YMinValue)) & "' style='text-anchor: end' dominant-baseline='middle'                         font-weight='bold'  font-size='15px' >" & AxisNumberFormatAxis75 & "</text>" 
+     &  
+     "<text x='"& X_Axis_Adjustment-1 &"' y='" & y_axis_adjustment-INT(100 * DIVIDE(Axis50 - YMinValue, YMaxValue - YMinValue)) & "' style='text-anchor: end' dominant-baseline='middle'                         font-weight='bold'  font-size='17px' >" & AxisNumberFormatAxis50 & "</text>" 
+     &
+     "<text x='"& X_Axis_Adjustment-1 &"' y='" & y_axis_adjustment-INT(100 * DIVIDE(Axis25 - YMinValue, YMaxValue - YMinValue)) & "' style='text-anchor: end' dominant-baseline='middle'                         font-weight='bold'  font-size='15px' >" & AxisNumberFormatAxis25 & "</text>" 
+     &
+     "<text x='"& X_Axis_Adjustment-1 &"' y='" & y_axis_adjustment-INT(100 * DIVIDE(Axis0 - YMinValue, YMaxValue - YMinValue)) & "' style='text-anchor: end' dominant-baseline='middle'                          font-weight='bold'  font-size='17px' >" & AxisNumberFormatAxis0 & "</text>" &
+     "</svg>"
+     
+
+    //If no data add a blank box that says 'no data'
+     VAR No_Data =
+     "data:image/svg+xml;utf8," &
+     "<svg xmlns='http://www.w3.org/2000/svg' x='0px' y='0px' viewBox='0 0 " & Width & " " & height & " ' style='background: %23DCDCDC'>" &
+     "<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='2EM' >No Data</text>" &
+     "</svg>"
+
+RETURN IF(ISBLANK(CALCULATE(MAX(MetricInputMetrics[Value - Numeric]), FILTER(MetricInputMetrics, ISBLANK(MetricInputMetrics[Value - Numeric])=FALSE()))), BLANK() , SVGImageURL)

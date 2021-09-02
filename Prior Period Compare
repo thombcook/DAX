@@ -1,0 +1,21 @@
+TPM Status Trend Arrow = // Function to create an up or down arrow in the BEI_Agg fields.
+
+	VAR Prior_Period = CALCULATE(MAX(TPMTable[ReportDate]),
+    				FILTER(TPMTable, ISBLANK(TPMTable[TPMStatusEnum]) = FALSE() && 
+                            TPMTable[ProjectID] = EARLIER(TPMTable[ProjectID]) &&
+                            TPMTable[TPM Name] = EARLIER(TPMTable[TPM Name]) &&
+                            TPMTable[ReportDate] < EARLIER(TPMTable[ReportDate])))
+
+	var prior_period_metric = CALCULATE(   //Calculate the alternative reporting metric if the last month was NULL. 
+  			MAX(TPMTable[TPMStatusEnum]),
+    			FILTER(TPMTable, 
+           		TPMTable[ProjectID] = EARLIER(TPMTable[ProjectID]) &&
+                   TPMTable[TPM Name] = EARLIER(TPMTable[TPM Name]) &&
+           		TPMTable[ReportDate] = Prior_Period ))
+
+	var img_result = IF( ISBLANK(TPMTable[TPMStatusEnum]), BLANK(), IF( ISBLANK(prior_period_metric),  UNICHAR(11044),
+				IF(TPMTable[TPMStatusEnum] > prior_period_metric, UNICHAR(129157), 
+				IF( TPMTable[TPMStatusEnum] < prior_period_metric, UNICHAR(129158),
+				IF( TPMTable[TPMStatusEnum] = prior_period_metric, unichar(129154), 
+				BLANK())))))
+	Return img_result

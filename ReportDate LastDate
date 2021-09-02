@@ -1,0 +1,1 @@
+Report_Date_LastDate = CALCULATE(MAX(MetricInputsFlat[ReportDate]), ALLEXCEPT(MetricInputsFlat, MetricInputsFlat[ReportDate], Projects[Project Code and Name]))

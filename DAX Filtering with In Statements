@@ -1,0 +1,4 @@
+Open Engineering Challenge Red and Yellow Count = 
+
+
+CALCULATE(COUNTROWS(MetricInputMetrics), FILTER(MetricInputMetrics, MetricInputMetrics[MetricID] in {"410", "411", "412", "484", "2967"} && MetricInputMetrics[Value] in {"R", "Y"}))

@@ -1,0 +1,8 @@
+// USed as a function in Power Query to help turn jpeg images into the format that Power BI can read as an image once uploaded. Used in conjunction with a folder of
+// images to upload a folder of images.
+
+= (BinaryContent as binary) as text=>
+let
+    Base64 = "data:image/jpeg;base64, " & Binary.ToText(BinaryContent, BinaryEncoding.Base64)
+in
+    Base64

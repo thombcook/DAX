@@ -6,3 +6,9 @@ let
     Base64 = "data:image/jpeg;base64, " & Binary.ToText(BinaryContent, BinaryEncoding.Base64)
 in
     Base64
+
+
+//Once function is defined, use this as the Source:
+    //= Folder.Files("C:\cmo\metrics\cmo02_dev\Hang10\photoshop\PowerBiStoplight\export1") // contains jpegs
+//Second step in the APplied Steps in Power Query:
+    //= Table.AddColumn(Source, "BinaryToPbiImage", each BinaryToPbiImage([Content]))
